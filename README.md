@@ -153,38 +153,12 @@ Copy the example file and fill in your keys:
 cp .env.example .env
 ```
 
-Edit `.env`:
+Create a `.env` file in your project and add the following api keys:
 
 ```env
 GROQ_API_KEY=gsk_...          # from console.groq.com
-ENDEE_API_KEY=...              # from endee.io
+ENDEE_API_KEY=...              # for endee auth
 ENDEE_BASE_URL=http://localhost:8080/api/v1
-```
-
-Then load the variables into your shell.
-
-**Windows PowerShell:**
-
-```powershell
-$env:GROQ_API_KEY   = "gsk_..."
-$env:ENDEE_API_KEY  = "..."
-$env:ENDEE_BASE_URL = "http://localhost:8080/api/v1"
-```
-
-**Windows CMD:**
-
-```cmd
-set GROQ_API_KEY=gsk_...
-set ENDEE_API_KEY=...
-set ENDEE_BASE_URL=http://localhost:8080/api/v1
-```
-
-**macOS / Linux:**
-
-```bash
-export GROQ_API_KEY=gsk_...
-export ENDEE_API_KEY=...
-export ENDEE_BASE_URL=http://localhost:8080/api/v1
 ```
 
 > **If Endee is behind an ngrok tunnel** set `ENDEE_BASE_URL` to your ngrok URL:
@@ -206,7 +180,7 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 ```
 
-> **First run note:** the first analysis downloads ~750 MB of Sentence Transformer model weights (`all-mpnet-base-v2` and `st-codesearch-distilroberta-base`). This happens once and is cached locally. Subsequent runs are instant.
+> **First run note:** the first analysis downloads ~750 MB of Sentence Transformer model weights which is required for embedding models (`all-mpnet-base-v2` and `st-codesearch-distilroberta-base`). This happens once and is cached locally. Subsequent runs are instant.
 
 ---
 
@@ -225,11 +199,7 @@ You should see:
 INFO:     Uvicorn running on http://127.0.0.1:8000
 ```
 
-If Endee is not reachable the server will print a clear error. You can also run the diagnostics script independently:
-
-```bash
-python diagnose_endee.py
-```
+If Endee is not reachable the server will print a clear error.
 
 Interactive API docs are available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
@@ -237,7 +207,7 @@ Interactive API docs are available at [http://localhost:8000/docs](http://localh
 
 ### 5. Open the frontend
 
-**Option A — VS Code Live Server (recommended):**
+**Option A — VS Code Live Server Extention (recommended):**
 
 1. Install the [Live Server extension](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) in VS Code
 2. Right-click `frontend.html` in the Explorer panel
