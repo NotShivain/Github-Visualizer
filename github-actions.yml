@@ -1,0 +1,62 @@
+# azure/github-actions.yml
+# Copy this to .github/workflows/deploy.yml to enable CI/CD.
+#
+# Required GitHub secrets:
+#   AZURE_CREDENTIALS   — output of: az ad sp create-for-rbac --sdk-auth
+#   ACR_NAME            — your ACR name (without .azurecr.io)
+#   RESOURCE_GROUP      — Azure resource group
+#   GROQ_API_KEY        — Groq secret
+#   ENDEE_API_KEY       — Endee secret
+
+name: Build & Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:      # allow manual trigger
+
+env:
+  APP_NAME: github-visualizer
+  LOCATION: eastus
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_NAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build \
+            -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${IMAGE_TAG} \
+            -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:latest \
+            .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${IMAGE_TAG}
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:latest
+
+      - name: Deploy Bicep template
+        uses: azure/arm-deploy@v1
+        with:
+          resourceGroupName: ${{ secrets.RESOURCE_GROUP }}
+          template: azure/container-app.bicep
+          parameters: >
+            acrName=${{ secrets.ACR_NAME }}
+            imageTag=${{ github.sha }}
+            appName=${{ env.APP_NAME }}
+            location=${{ env.LOCATION }}
+            groqApiKey=${{ secrets.GROQ_API_KEY }}
+            endeeApiKey=${{ secrets.ENDEE_API_KEY }}

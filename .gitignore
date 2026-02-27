@@ -1,0 +1,9 @@
+venv/
+env/
+ENV/
+output/
+diagnose_endee.py
+.venv/
+.pyenv/
+.env
+.env.*
