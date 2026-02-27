@@ -359,3 +359,5 @@ The application is being deployed to **Azure Container Apps** with the following
 
 Both containers run in the same Container Apps Environment and communicate over the private internal network at `http://endee-server:8080/api/v1`.
 The Application Image is already available on docker hub, visit `https://hub.docker.com/repository/docker/notshivain/githubvisualizer/general`
+
+Built with ❤️ By Shivain
