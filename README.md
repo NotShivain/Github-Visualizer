@@ -1,7 +1,7 @@
 # GitHub Visualizer
 
 > **Built with [Endee](https://endee.io) — a high-performance vector database.**
-> This project was built as a demonstration of Endee's capabilities as a vector store for a production AI pipeline. Endee is used as the sole vector database for storing and retrieving code and documentation embeddings across the entire multi-agent system. See [Why Endee](#-why-endee) for details.
+> This project was built as a demonstration of Endee's capabilities as a vector store for a production AI pipeline. Endee is used as the sole vector database for storing and retrieving code and documentation embeddings across the entire multi-agent system.
 
 ---
 
