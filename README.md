@@ -105,7 +105,7 @@ Chat is a separate RAG loop that runs on demand: user question → embed → que
 | Python 3.11+ | Tested on 3.11 and 3.13 |
 | Docker Desktop | For running Endee locally |
 | Groq API key | Free tier available at [console.groq.com](https://console.groq.com) |
-| Endee API key | From [endee.io](https://endee.io) — required even for self-hosted |
+| Endee API key | required even for self-hosted for authentication, you can set it anything as you like|
 | VS Code + Live Server | Or any static file server for the frontend |
 
 ---
