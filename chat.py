@@ -27,7 +27,6 @@ from utils.helpers import (
     slugify,
 )
 
-# ── Config ─────────────────────────────────────────────────────────────────────
 TOP_K_PER_INDEX = 5     # snippets retrieved from each index per question
 EF              = 128   # Endee HNSW search quality
 MAX_CONTEXT_CHARS = 6000  # total chars of retrieved snippets fed to LLM
@@ -46,8 +45,7 @@ When answering:
 - Keep answers focused and under 400 words unless the question demands more.
 """
 
-
-# ── Core retrieval ─────────────────────────────────────────────────────────────
+# RAG RETRIEVAL USING ENDEE VECTOR DB:
 
 def retrieve(
     question: str,
@@ -116,7 +114,6 @@ def _build_context(snippets: list[dict]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-# ── Single-turn answer ─────────────────────────────────────────────────────────
 
 def answer(
     question: str,
@@ -143,9 +140,8 @@ def answer(
 
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    # Inject conversation history (trim to last 6 turns to stay within context)
     if history:
-        messages.extend(history[-12:])  # 6 user + 6 assistant turns
+        messages.extend(history[-12:])
 
     messages.append({
         "role": "user",
@@ -166,7 +162,6 @@ def answer(
     return response, snippets
 
 
-# ── Streaming answer ───────────────────────────────────────────────────────────
 
 def answer_stream(
     question: str,
@@ -207,17 +202,14 @@ def answer_stream(
         stream=True,
     )
 
-    # First yield the source citations as a metadata event
     citations = [{"file": s["file"], "source": s["source"], "similarity": s["similarity"]}
                  for s in snippets[:8]]
     import json
     yield f"event: citations\ndata: {json.dumps(citations)}\n\n"
 
-    # Stream tokens
     for chunk in stream:
         delta = chunk.choices[0].delta.content
         if delta:
-            # Escape newlines for SSE
             yield f"data: {delta.replace(chr(10), '<br>')}\n\n"
 
     yield "data: [DONE]\n\n"

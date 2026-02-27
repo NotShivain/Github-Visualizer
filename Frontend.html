@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GH Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Berkeley+Mono:ital,wght@0,100..700;1,100..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+  /* ── Reset & tokens ──────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0b0d0f;
+    --surface:  #111418;
+    --panel:    #161b22;
+    --border:   #21262d;
+    --border2:  #30363d;
+    --green:    #3fb950;
+    --green2:   #56d364;
+    --teal:     #39d353;
+    --amber:    #e3b341;
+    --red:      #f85149;
+    --blue:     #58a6ff;
+    --purple:   #bc8cff;
+    --muted:    #484f58;
+    --muted2:   #6e7681;
+    --text:     #c9d1d9;
+    --text2:    #8b949e;
+    --white:    #f0f6fc;
+    --font-mono: 'Berkeley Mono', 'Fira Code', monospace;
+    --font-serif: 'Instrument Serif', Georgia, serif;
+    --r: 6px;
+    --r2: 10px;
+  }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* Subtle scan-line texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.06) 2px,
+      rgba(0,0,0,0.06) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Layout ──────────────────────────────────────────────────────── */
+  #app {
+    display: grid;
+    grid-template-rows: 48px 1fr;
+    grid-template-columns: 300px 1fr 380px;
+    height: 100vh;
+    gap: 0;
+  }
+
+  /* ── Top bar ─────────────────────────────────────────────────────── */
+  #topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--green), var(--teal));
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 0 12px rgba(63,185,80,0.3);
+  }
+
+  .logo-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--white);
+    letter-spacing: -0.3px;
+  }
+
+  .logo-text span { color: var(--green); }
+
+  .url-bar {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    max-width: 680px;
+  }
+
+  .url-input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 12px;
+    outline: none;
+    transition: border-color .15s;
+  }
+
+  .url-input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(63,185,80,0.1);
+  }
+
+  .url-input::placeholder { color: var(--muted2); }
+
+  .btn-analyze {
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: var(--r);
+    padding: 6px 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, box-shadow .15s;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-analyze:hover { background: var(--green2); box-shadow: 0 0 12px rgba(63,185,80,0.35); }
+  .btn-analyze:disabled { background: var(--muted); cursor: not-allowed; }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--muted2);
+    white-space: nowrap;
+    transition: all .3s;
+  }
+
+  .status-pill.ok { border-color: var(--green); color: var(--green); }
+  .status-pill.err { border-color: var(--red); color: var(--red); }
+  .status-pill.busy { border-color: var(--amber); color: var(--amber); }
+
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status-pill.busy .dot { animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* ── Left sidebar — file tree / info ─────────────────────────────── */
+  #sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 12px 16px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--muted2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sidebar-header svg { flex-shrink: 0; }
+
+  #repo-info {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .repo-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 4px;
+  }
+
+  .repo-meta {
+    font-size: 11px;
+    color: var(--muted2);
+    line-height: 1.8;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(63,185,80,0.12);
+    color: var(--green);
+    border: 1px solid rgba(63,185,80,0.25);
+  }
+
+  #file-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .tree-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 16px;
+    font-size: 12px;
+    color: var(--text2);
+    cursor: pointer;
+    transition: background .1s, color .1s;
+    user-select: none;
+  }
+
+  .tree-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+  .tree-item.active { background: rgba(63,185,80,0.08); color: var(--green2); }
+
+  .tree-icon { font-size: 11px; flex-shrink: 0; opacity: 0.7; }
+
+  #sessions-panel {
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .session-item {
+    padding: 8px 16px;
+    font-size: 11px;
+    color: var(--muted2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background .1s;
+    gap: 8px;
+  }
+
+  .session-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+  .session-item.active { color: var(--blue); }
+
+  .session-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .session-clear {
+    font-size: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .session-clear:hover { color: var(--red); background: rgba(248,81,73,0.1); }
+
+  /* ── Centre panel — tabs: chart / explanation ────────────────────── */
+  #main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    flex-shrink: 0;
+  }
+
+  .tab {
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--muted2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    white-space: nowrap;
+    user-select: none;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--green2); border-bottom-color: var(--green); }
+
+  .tab-content {
+    flex: 1;
+    overflow: hidden;
+    display: none;
+    position: relative;
+  }
+
+  .tab-content.active { display: flex; flex-direction: column; }
+
+  /* ── Mermaid diagram ─────────────────────────────────────────────── */
+  #chart-wrap {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    position: relative;
+  }
+
+  #chart-inner {
+    transform-origin: center center;
+    transition: transform .2s;
+  }
+
+  #chart-inner svg {
+    max-width: none !important;
+    filter: drop-shadow(0 0 20px rgba(63,185,80,0.08));
+  }
+
+  .chart-controls {
+    position: absolute;
+    bottom: 16px; right: 16px;
+    display: flex; gap: 6px;
+    z-index: 10;
+  }
+
+  .ctrl-btn {
+    width: 32px; height: 32px;
+    background: var(--panel);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    color: var(--text2);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+
+  .ctrl-btn:hover { border-color: var(--green); color: var(--green); }
+
+  /* ── Explanation panel ───────────────────────────────────────────── */
+  #explanation-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 40px;
+  }
+
+  #explanation-content {
+    max-width: 720px;
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.85;
+    color: var(--text);
+  }
+
+  #explanation-content h1,
+  #explanation-content h2,
+  #explanation-content h3 {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--white);
+    margin: 1.6em 0 0.6em;
+  }
+
+  #explanation-content h1 { font-size: 26px; }
+  #explanation-content h2 { font-size: 20px; }
+  #explanation-content h3 { font-size: 16px; color: var(--green2); }
+
+  #explanation-content p { margin-bottom: 1em; }
+
+  #explanation-content code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: var(--purple);
+  }
+
+  #explanation-content pre {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 1em 0;
+  }
+
+  #explanation-content pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--green2);
+    font-size: 12px;
+  }
+
+  #explanation-content ul, #explanation-content ol {
+    padding-left: 1.4em;
+    margin-bottom: 1em;
+  }
+
+  #explanation-content li { margin-bottom: 4px; }
+
+  #explanation-content strong { color: var(--white); font-weight: 600; }
+  #explanation-content em { color: var(--amber); font-style: italic; }
+
+  /* ── Mermaid source tab ──────────────────────────────────────────── */
+  #source-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  #source-content {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--green2);
+    white-space: pre-wrap;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 20px;
+  }
+
+  /* ── Empty states ────────────────────────────────────────────────── */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--muted);
+    text-align: center;
+    padding: 40px;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    opacity: 0.3;
+    filter: grayscale(1);
+  }
+
+  .empty-title {
+    font-size: 14px;
+    color: var(--muted2);
+    font-weight: 600;
+  }
+
+  .empty-sub {
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 280px;
+    line-height: 1.7;
+  }
+
+  /* ── Right panel — chat ──────────────────────────────────────────── */
+  #chat-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #chat-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .chat-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--muted2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chat-title-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background .3s;
+  }
+
+  .chat-title-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  .chat-repo-badge {
+    font-size: 10px;
+    color: var(--blue);
+    background: rgba(88,166,255,0.1);
+    border: 1px solid rgba(88,166,255,0.2);
+    border-radius: 10px;
+    padding: 2px 8px;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: msgIn .2s ease;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-role {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .msg.user .msg-role { color: var(--muted2); }
+  .msg.assistant .msg-role { color: var(--green); }
+  .msg.system .msg-role { color: var(--amber); }
+
+  .msg-bubble {
+    padding: 10px 14px;
+    border-radius: var(--r2);
+    font-size: 12.5px;
+    line-height: 1.7;
+    position: relative;
+  }
+
+  .msg.user .msg-bubble {
+    background: var(--panel);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-top-right-radius: 2px;
+  }
+
+  .msg.assistant .msg-bubble {
+    background: rgba(63,185,80,0.06);
+    border: 1px solid rgba(63,185,80,0.18);
+    color: var(--text);
+    border-top-left-radius: 2px;
+  }
+
+  .msg.system .msg-bubble {
+    background: rgba(227,179,65,0.06);
+    border: 1px solid rgba(227,179,65,0.2);
+    color: var(--amber);
+    font-size: 11px;
+  }
+
+  .msg-bubble code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--purple);
+  }
+
+  .msg-bubble pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+    font-size: 11px;
+    color: var(--green2);
+  }
+
+  .msg-bubble pre code { background: none; padding: 0; color: inherit; }
+
+  .citations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .citation-chip {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.2);
+    color: var(--blue);
+    cursor: default;
+  }
+
+  .citation-chip.code-src {
+    background: rgba(188,140,255,0.08);
+    border-color: rgba(188,140,255,0.2);
+    color: var(--purple);
+  }
+
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px;
+    background: rgba(63,185,80,0.06);
+    border: 1px solid rgba(63,185,80,0.18);
+    border-radius: var(--r2);
+    border-top-left-radius: 2px;
+    width: fit-content;
+  }
+
+  .typing-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: typingBounce 1.2s infinite;
+  }
+
+  .typing-dot:nth-child(2) { animation-delay: .2s; }
+  .typing-dot:nth-child(3) { animation-delay: .4s; }
+
+  @keyframes typingBounce {
+    0%, 100% { transform: translateY(0); opacity: 0.4; }
+    50% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* ── Chat input ──────────────────────────────────────────────────── */
+  #chat-input-area {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  #chat-input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 8px 12px;
+    resize: none;
+    outline: none;
+    min-height: 36px;
+    max-height: 120px;
+    line-height: 1.5;
+    transition: border-color .15s;
+    overflow-y: auto;
+  }
+
+  #chat-input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(63,185,80,0.08);
+  }
+
+  #chat-input::placeholder { color: var(--muted); }
+  #chat-input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-send {
+    width: 36px; height: 36px;
+    background: var(--green);
+    border: none;
+    border-radius: var(--r);
+    color: #000;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background .15s, box-shadow .15s;
+  }
+
+  .btn-send:hover { background: var(--green2); box-shadow: 0 0 10px rgba(63,185,80,0.4); }
+  .btn-send:disabled { background: var(--muted); cursor: not-allowed; }
+
+  .chat-hint {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* ── Progress bar ────────────────────────────────────────────────── */
+  #progress-bar {
+    position: fixed;
+    top: 48px; left: 0; right: 0;
+    height: 2px;
+    background: transparent;
+    z-index: 100;
+    display: none;
+  }
+
+  #progress-bar.active { display: block; }
+
+  #progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), var(--teal), var(--green));
+    background-size: 200% 100%;
+    animation: progressAnim 1.5s linear infinite;
+    transition: width .5s ease;
+  }
+
+  @keyframes progressAnim {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  /* ── Scrollbar ───────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ── Analyze overlay ─────────────────────────────────────────────── */
+  #analyze-log {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding: 20px 40px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  #analyze-log.active { display: flex; }
+
+  .log-line {
+    font-size: 12px;
+    color: var(--muted2);
+    display: flex;
+    gap: 12px;
+    animation: logIn .15s ease;
+  }
+
+  @keyframes logIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-ts { color: var(--muted); flex-shrink: 0; }
+  .log-msg { color: var(--text2); }
+  .log-msg.ok { color: var(--green); }
+  .log-msg.err { color: var(--red); }
+  .log-msg.info { color: var(--blue); }
+  .log-msg.warn { color: var(--amber); }
+
+  /* ── Responsive tweaks ───────────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    #app {
+      grid-template-columns: 240px 1fr 340px;
+    }
+  }
+
+  /* ── Tooltip ─────────────────────────────────────────────────────── */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%; transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 1000;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Top bar ─────────────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="logo">
+      <div class="logo-icon">⬡</div>
+      <div class="logo-text">GH<span>Viz</span></div>
+    </div>
+
+    <div class="url-bar">
+      <input id="repo-url-input" class="url-input"
+        type="text"
+        placeholder="https://github.com/owner/repo"
+        value="" />
+      <button class="btn-analyze" id="btn-analyze" onclick="startAnalyze()">
+        ▶ Analyze
+      </button>
+    </div>
+
+    <div id="status-pill" class="status-pill">
+      <span class="dot"></span>
+      <span id="status-text">ready</span>
+    </div>
+
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+      <span style="font-size:11px; color:var(--muted2);">API:</span>
+      <input id="api-url-input" class="url-input" style="width:200px;"
+        type="text" placeholder="http://localhost:8000" value="http://localhost:8000" />
+    </div>
+  </header>
+
+  <!-- ── Progress bar ────────────────────────────────────────────── -->
+  <div id="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
+
+  <!-- ── Left sidebar ────────────────────────────────────────────── -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
+      </svg>
+      Explorer
+    </div>
+
+    <div id="repo-info">
+      <div class="repo-name" id="repo-display">No repo loaded</div>
+      <div class="repo-meta" id="repo-meta" style="color:var(--muted)">
+        Paste a GitHub URL above and click Analyze
+      </div>
+    </div>
+
+    <div id="file-tree">
+      <div style="padding:20px 16px; color:var(--muted); font-size:11px; line-height:1.8;">
+        File structure will appear here after analysis.
+      </div>
+    </div>
+
+    <div id="sessions-panel">
+      <div class="sidebar-header" style="cursor:pointer" onclick="toggleSessions()">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M5 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+          <path d="m2.165 15.803.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.273.362a21.673 21.673 0 0 0 .693-.125zm.8-3.108a1 1 0 0 0-.287-.801C1.618 10.83 1 9.468 1 8c0-3.192 3.004-6 7-6s7 2.808 7 6c0 3.193-3.004 6-7 6a8.06 8.06 0 0 1-2.088-.272 1 1 0 0 0-.711.074c-.387.196-1.24.57-2.634.893a10.97 10.97 0 0 0 .398-2z"/>
+        </svg>
+        Chat Sessions
+        <span id="session-count" style="margin-left:auto; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:0 6px; font-size:10px;">0</span>
+      </div>
+      <div id="sessions-list" style="max-height:160px; overflow-y:auto;"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main centre panel ────────────────────────────────────────── -->
+  <main id="main">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="chart" onclick="switchTab('chart')">
+        ⬡ Flowchart
+      </div>
+      <div class="tab" data-tab="explanation" onclick="switchTab('explanation')">
+        ≡ Explanation
+      </div>
+      <div class="tab" data-tab="source" onclick="switchTab('source')">
+        &lt;/&gt; Mermaid Source
+      </div>
+    </div>
+
+    <!-- Analyze log (shown during analysis) -->
+    <div id="analyze-log"></div>
+
+    <!-- Chart tab -->
+    <div class="tab-content active" id="tab-chart">
+      <div id="chart-wrap">
+        <div class="empty-state" id="chart-empty">
+          <div class="empty-icon">⬡</div>
+          <div class="empty-title">No diagram yet</div>
+          <div class="empty-sub">Analyze a repository to generate an interactive flowchart of its architecture.</div>
+        </div>
+        <div id="chart-inner" style="display:none"></div>
+      </div>
+      <div class="chart-controls">
+        <button class="ctrl-btn" data-tip="Zoom in"  onclick="zoom(1.2)">+</button>
+        <button class="ctrl-btn" data-tip="Zoom out" onclick="zoom(0.8)">−</button>
+        <button class="ctrl-btn" data-tip="Reset"    onclick="zoomReset()">⊡</button>
+        <button class="ctrl-btn" data-tip="Download SVG" onclick="downloadSVG()">↓</button>
+      </div>
+    </div>
+
+    <!-- Explanation tab -->
+    <div class="tab-content" id="tab-explanation">
+      <div id="explanation-wrap">
+        <div class="empty-state">
+          <div class="empty-icon">≡</div>
+          <div class="empty-title">No explanation yet</div>
+          <div class="empty-sub">Run an analysis to get a detailed breakdown of the repository architecture.</div>
+        </div>
+        <div id="explanation-content" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Source tab -->
+    <div class="tab-content" id="tab-source">
+      <div id="source-wrap">
+        <div class="empty-state">
+          <div class="empty-icon">&lt;/&gt;</div>
+          <div class="empty-title">No source yet</div>
+          <div class="empty-sub">Mermaid diagram source will appear here after analysis.</div>
+        </div>
+        <pre id="source-content" style="display:none"></pre>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Chat panel ───────────────────────────────────────────────── -->
+  <aside id="chat-panel">
+    <div id="chat-header">
+      <div class="chat-title">
+        <div class="chat-title-dot" id="chat-dot"></div>
+        Chat with Repo
+      </div>
+      <div class="chat-repo-badge" id="chat-repo-badge">no repo loaded</div>
+    </div>
+
+    <div id="messages">
+      <div class="msg system">
+        <div class="msg-role">system</div>
+        <div class="msg-bubble">
+          Analyze a repository first, then ask me anything about the codebase — architecture, functions, dependencies, how to extend it, anything.
+        </div>
+      </div>
+    </div>
+
+    <div id="chat-input-area">
+      <div class="input-row">
+        <textarea id="chat-input"
+          placeholder="Ask about the codebase…"
+          rows="1"
+          disabled
+          onkeydown="handleKey(event)"></textarea>
+        <button class="btn-send" id="btn-send" disabled onclick="sendMessage()">➤</button>
+      </div>
+      <div class="chat-hint">Enter to send · Shift+Enter for newline</div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+const state = {
+  apiBase:    'http://localhost:8000',
+  repoName:   null,
+  sessionId:  null,
+  sessions:   [],   // [{id, repoName, label}]
+  scale:      1,
+  analyzing:  false,
+  chatting:   false,
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor:       '#161b22',
+    primaryTextColor:   '#c9d1d9',
+    primaryBorderColor: '#30363d',
+    lineColor:          '#3fb950',
+    secondaryColor:     '#21262d',
+    tertiaryColor:      '#0d1117',
+    edgeLabelBackground:'#161b22',
+    clusterBkg:         '#161b22',
+    titleColor:         '#f0f6fc',
+    nodeTextColor:      '#c9d1d9',
+    fontFamily:         'Berkeley Mono, Fira Code, monospace',
+  },
+  flowchart: { curve: 'basis', htmlLabels: true },
+});
+
+// Sync API base from input
+document.getElementById('api-url-input').addEventListener('change', e => {
+  state.apiBase = e.target.value.replace(/\/$/, '');
+});
+
+// Auto-resize textarea
+document.getElementById('chat-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c =>
+    c.classList.toggle('active', c.id === `tab-${name}`));
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────
+function setStatus(msg, type = '') {
+  const pill = document.getElementById('status-pill');
+  const txt  = document.getElementById('status-text');
+  pill.className = `status-pill ${type}`;
+  txt.textContent = msg;
+}
+
+// ── Progress bar ──────────────────────────────────────────────────────────
+let progressTimer = null;
+function startProgress() {
+  const bar  = document.getElementById('progress-bar');
+  const fill = document.getElementById('progress-fill');
+  bar.classList.add('active');
+  let pct = 0;
+  clearInterval(progressTimer);
+  fill.style.width = '0%';
+  progressTimer = setInterval(() => {
+    pct = Math.min(pct + (pct < 40 ? 3 : pct < 70 ? 1 : 0.3), 90);
+    fill.style.width = pct + '%';
+  }, 400);
+}
+
+function endProgress(ok = true) {
+  clearInterval(progressTimer);
+  const fill = document.getElementById('progress-fill');
+  fill.style.width = '100%';
+  fill.style.background = ok ? 'var(--green)' : 'var(--red)';
+  setTimeout(() => {
+    document.getElementById('progress-bar').classList.remove('active');
+    fill.style.width = '0%';
+    fill.style.background = '';
+  }, 600);
+}
+
+// ── Log lines during analysis ─────────────────────────────────────────────
+function addLog(msg, type = '') {
+  const log = document.getElementById('analyze-log');
+  const ts  = new Date().toLocaleTimeString('en-GB', {hour12: false});
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-ts">[${ts}]</span><span class="log-msg ${type}">${escHtml(msg)}</span>`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Analyze ───────────────────────────────────────────────────────────────
+async function startAnalyze() {
+  const url = document.getElementById('repo-url-input').value.trim();
+  if (!url) return;
+
+  state.apiBase = document.getElementById('api-url-input').value.replace(/\/$/, '');
+
+  if (state.analyzing) return;
+  state.analyzing = true;
+
+  // Show log overlay
+  const log = document.getElementById('analyze-log');
+  log.innerHTML = '';
+  log.classList.add('active');
+
+  // Hide existing content
+  document.getElementById('chart-empty').style.display = 'none';
+  document.getElementById('chart-inner').style.display = 'none';
+  document.getElementById('explanation-content').style.display = 'none';
+  document.getElementById('source-content').style.display = 'none';
+
+  document.getElementById('btn-analyze').disabled = true;
+  setStatus('analyzing…', 'busy');
+  startProgress();
+
+  const steps = [
+    'Cloning repository…',
+    'Scanning source files…',
+    'Generating embeddings (code model)…',
+    'Generating embeddings (text model)…',
+    'Building dependency graph…',
+    'Upserting vectors to Endee…',
+    'Retrieving context snippets…',
+    'Synthesizing explanation…',
+    'Generating Mermaid flowchart…',
+    'Rendering HTML output…',
+  ];
+
+  let stepIdx = 0;
+  addLog('Starting pipeline', 'info');
+  const stepTimer = setInterval(() => {
+    if (stepIdx < steps.length) addLog(steps[stepIdx++]);
+  }, 8000);
+
+  try {
+    const res = await fetch(`${state.apiBase}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_url: url }),
+    });
+
+    clearInterval(stepTimer);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+
+    const data = await res.json();
+    addLog(`Analysis complete — ${data.repo_name}`, 'ok');
+
+    // ── Populate UI ──────────────────────────────────────────────────
+    state.repoName = data.repo_name;
+
+    // Sidebar
+    document.getElementById('repo-display').textContent = data.repo_name;
+    document.getElementById('repo-meta').innerHTML =
+      `<span class="badge">✓ analyzed</span>`;
+    document.getElementById('chat-repo-badge').textContent = data.repo_name;
+    document.getElementById('chat-dot').classList.add('online');
+    document.getElementById('chat-input').disabled = false;
+    document.getElementById('btn-send').disabled = false;
+
+    // File tree from explanation keywords (quick heuristic)
+    populateFileTree(data);
+
+    // Chart
+    await renderMermaid(data.mermaid_code);
+
+    // Explanation
+    const expEl = document.getElementById('explanation-content');
+    expEl.innerHTML = marked.parse(data.explanation || '*No explanation returned.*');
+    expEl.style.display = 'block';
+
+    // Source
+    const srcEl = document.getElementById('source-content');
+    srcEl.textContent = data.mermaid_code;
+    srcEl.style.display = 'block';
+
+    // New chat session for this repo
+    startNewSession(data.repo_name);
+
+    setStatus('ready', 'ok');
+    endProgress(true);
+    addLog('Done. Switch to Flowchart tab to explore.', 'ok');
+    setTimeout(() => {
+      log.classList.remove('active');
+      switchTab('chart');
+    }, 1500);
+
+  } catch (err) {
+    clearInterval(stepTimer);
+    addLog(`Error: ${err.message}`, 'err');
+    setStatus('error', 'err');
+    endProgress(false);
+  } finally {
+    state.analyzing = false;
+    document.getElementById('btn-analyze').disabled = false;
+  }
+}
+
+// ── Mermaid rendering ─────────────────────────────────────────────────────
+async function renderMermaid(code) {
+  const inner = document.getElementById('chart-inner');
+  inner.style.display = 'none';
+  try {
+    const id = 'mermaid-' + Date.now();
+    const { svg } = await mermaid.render(id, code);
+    inner.innerHTML = svg;
+    inner.style.display = 'block';
+    document.getElementById('chart-empty').style.display = 'none';
+    state.scale = 1;
+  } catch (e) {
+    addLog(`Mermaid render warning: ${e.message}`, 'warn');
+    inner.style.display = 'none';
+    document.getElementById('chart-empty').style.display = '';
+  }
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────
+function zoom(factor) {
+  state.scale = Math.max(0.2, Math.min(4, state.scale * factor));
+  document.getElementById('chart-inner').style.transform = `scale(${state.scale})`;
+}
+
+function zoomReset() {
+  state.scale = 1;
+  document.getElementById('chart-inner').style.transform = 'scale(1)';
+}
+
+// ── Download SVG ──────────────────────────────────────────────────────────
+function downloadSVG() {
+  const svg = document.querySelector('#chart-inner svg');
+  if (!svg) return;
+  const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.repoName || 'diagram').replace('/', '_') + '.svg';
+  a.click();
+}
+
+// ── File tree heuristic ───────────────────────────────────────────────────
+function populateFileTree(data) {
+  const tree = document.getElementById('file-tree');
+  // Extract file-looking tokens from explanation
+  const raw  = data.explanation || '';
+  const files = [...new Set([
+    ...(raw.match(/[\w./\-]+\.(py|js|ts|go|rs|java|md|yaml|yml|json|toml)/g) || []),
+  ])].slice(0, 20);
+
+  if (!files.length) {
+    tree.innerHTML = '<div style="padding:12px 16px; color:var(--muted); font-size:11px;">No files detected in explanation.</div>';
+    return;
+  }
+
+  const icons = { py:'🐍', js:'🟨', ts:'🔷', go:'🐹', rs:'🦀', java:'☕',
+                  md:'📄', yaml:'⚙', yml:'⚙', json:'{}', toml:'⚙' };
+
+  tree.innerHTML = files.map(f => {
+    const ext = f.split('.').pop();
+    const icon = icons[ext] || '📄';
+    return `<div class="tree-item" onclick="filterChatByFile('${f}')">
+      <span class="tree-icon">${icon}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f}</span>
+    </div>`;
+  }).join('');
+}
+
+function filterChatByFile(file) {
+  const input = document.getElementById('chat-input');
+  input.value = `Explain the role of ${file} in this repo`;
+  input.focus();
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────
+function startNewSession(repoName) {
+  const id = 'ses-' + Date.now();
+  state.sessionId = id;
+  state.sessions.unshift({ id, repoName, label: repoName });
+  renderSessions();
+  clearMessages();
+  addSystemMsg(`New session started for <strong>${repoName}</strong>. Ask anything!`);
+}
+
+function renderSessions() {
+  const list = document.getElementById('sessions-list');
+  const count = document.getElementById('session-count');
+  count.textContent = state.sessions.length;
+
+  if (!state.sessions.length) {
+    list.innerHTML = '<div style="padding:8px 16px; color:var(--muted); font-size:11px;">No sessions yet</div>';
+    return;
+  }
+
+  list.innerHTML = state.sessions.map(s => `
+    <div class="session-item ${s.id === state.sessionId ? 'active' : ''}"
+         onclick="loadSession('${s.id}')">
+      <span class="session-label">${escHtml(s.label)}</span>
+      <span class="session-clear" onclick="deleteSession(event,'${s.id}')">✕</span>
+    </div>`).join('');
+}
+
+function loadSession(id) {
+  state.sessionId = id;
+  const s = state.sessions.find(x => x.id === id);
+  if (s) {
+    state.repoName = s.repoName;
+    document.getElementById('chat-repo-badge').textContent = s.repoName;
+  }
+  renderSessions();
+}
+
+async function deleteSession(e, id) {
+  e.stopPropagation();
+  const apiBase = document.getElementById('api-url-input').value.replace(/\/$/, '');
+  try {
+    await fetch(`${apiBase}/chat/sessions/${id}`, { method: 'DELETE' });
+  } catch (_) {}
+  state.sessions = state.sessions.filter(s => s.id !== id);
+  if (state.sessionId === id) state.sessionId = state.sessions[0]?.id || null;
+  renderSessions();
+}
+
+function toggleSessions() {
+  const list = document.getElementById('sessions-list');
+  list.style.display = list.style.display === 'none' ? '' : 'none';
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function clearMessages() {
+  document.getElementById('messages').innerHTML = '';
+}
+
+function addSystemMsg(html) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg system';
+  div.innerHTML = `<div class="msg-role">system</div><div class="msg-bubble">${html}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addUserMsg(text) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.innerHTML = `<div class="msg-role">you</div><div class="msg-bubble">${escHtml(text)}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addAssistantMsg(text, citations = []) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+
+  // Render markdown in assistant messages
+  const rendered = marked.parse(text);
+
+  const citHtml = citations.length
+    ? `<div class="citations">${
+        citations.slice(0, 8).map(c =>
+          `<span class="citation-chip ${c.source === 'code' ? 'code-src' : ''}"
+            title="similarity: ${c.similarity}">
+            ${c.source === 'code' ? '⟨⟩' : '≡'} ${escHtml(c.file.split('/').pop())}
+          </span>`
+        ).join('')
+      }</div>`
+    : '';
+
+  div.innerHTML = `<div class="msg-role">assistant</div>
+    <div class="msg-bubble">${rendered}${citHtml}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addTypingIndicator() {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.id = 'typing-msg';
+  div.innerHTML = `<div class="msg-role">assistant</div>
+    <div class="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  document.getElementById('typing-msg')?.remove();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text || state.chatting) return;
+  if (!state.repoName) {
+    addSystemMsg('Please analyze a repository first before chatting.');
+    return;
+  }
+
+  state.chatting = true;
+  input.value = '';
+  input.style.height = 'auto';
+  input.disabled = true;
+  document.getElementById('btn-send').disabled = true;
+
+  addUserMsg(text);
+  addTypingIndicator();
+
+  const apiBase = document.getElementById('api-url-input').value.replace(/\/$/, '');
+
+  // Use SSE streaming endpoint
+  try {
+    const res = await fetch(`${apiBase}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repo_name:  state.repoName,
+        question:   text,
+        session_id: state.sessionId,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+
+    removeTypingIndicator();
+
+    const reader    = res.body.getReader();
+    const decoder   = new TextDecoder();
+    let citations   = [];
+    let answerParts = [];
+
+    // Live streaming bubble
+    const msgs = document.getElementById('messages');
+    const bubble = document.createElement('div');
+    bubble.className = 'msg assistant';
+    bubble.innerHTML = `<div class="msg-role">assistant</div><div class="msg-bubble" id="stream-bubble"></div>`;
+    msgs.appendChild(bubble);
+
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep partial line
+
+      for (const line of lines) {
+        if (line.startsWith('event: citations')) continue;
+        if (line.startsWith('event: session')) continue;
+        if (line.startsWith('data: ')) {
+          const payload = line.slice(6);
+
+          // Citations JSON from citation event
+          if (payload.startsWith('[') || payload.startsWith('{')) {
+            try { citations = JSON.parse(payload); } catch (_) {}
+            continue;
+          }
+
+          if (payload === '[DONE]') break;
+
+          const token = payload.replace(/<br>/g, '\n');
+          answerParts.push(token);
+
+          // Update live bubble
+          const streamEl = document.getElementById('stream-bubble');
+          if (streamEl) {
+            streamEl.innerHTML = marked.parse(answerParts.join(''));
+          }
+          msgs.scrollTop = msgs.scrollHeight;
+        }
+      }
+    }
+
+    // Replace live bubble with final formatted one (with citations)
+    bubble.remove();
+    addAssistantMsg(answerParts.join(''), citations);
+
+    // Update session id from header if new
+    const newSid = res.headers.get('x-session-id');
+    if (newSid && newSid !== state.sessionId) {
+      state.sessionId = newSid;
+    }
+
+  } catch (err) {
+    removeTypingIndicator();
+    addSystemMsg(`Error: ${escHtml(err.message)}`);
+  } finally {
+    state.chatting = false;
+    input.disabled = false;
+    input.focus();
+    document.getElementById('btn-send').disabled = false;
+  }
+}
+
+// ── Keyboard shortcut: ⌘/Ctrl+Enter to analyze ───────────────────────────
+document.getElementById('repo-url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startAnalyze();
+});
+
+// ── Initial render ────────────────────────────────────────────────────────
+renderSessions();
+setStatus('ready');
+</script>
+</body>
+</html>

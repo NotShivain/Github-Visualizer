@@ -33,7 +33,6 @@ from pydantic import BaseModel, field_validator
 from pipeline import build_pipeline
 from chat import answer, answer_stream
 
-# ── App setup ─────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="GitHub Visualizer",
@@ -65,7 +64,6 @@ async def _startup():
     groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     endee_url  = os.getenv("ENDEE_BASE_URL")
 
-    # ── Endee connectivity check ──────────────────────────────────────────────
     _check_endee(endee_url)
 
     _pipeline  = build_pipeline(groq_model=groq_model, endee_base_url=endee_url)
@@ -81,7 +79,6 @@ def _check_endee(endee_url: str | None) -> None:
     ping_url = f"{base}/indexes"
     print(f"[startup] Checking Endee at {ping_url} ...")
 
-    # Raw HTTP check first
     try:
         with urllib.request.urlopen(ping_url, timeout=5):
             pass
@@ -91,16 +88,11 @@ def _check_endee(endee_url: str | None) -> None:
                 f"[startup] Endee returned HTTP {e.code} — check your ENDEE_API_KEY. "
                 f"URL: {ping_url}"
             )
-        # Other HTTP errors (404 etc) still means server is up
     except (urllib.error.URLError, OSError) as e:
         raise RuntimeError(
-            f"[startup] Cannot reach Endee at {ping_url}: {e}\n"
-            f"  - If running locally:  docker run -p 8080:8080 endeeio/endee-server:latest\n"
-            f"  - If using a remote server: set ENDEE_BASE_URL correctly\n"
-            f"  - Run  python diagnose_endee.py  for a full report."
+            f"[startup] Cannot reach Endee at {ping_url}  {e}\n"
         )
 
-    # SDK-level check
     try:
         client = Endee()
         if endee_url:
@@ -114,7 +106,6 @@ def _check_endee(endee_url: str | None) -> None:
         )
 
 
-# ── Shared helpers ────────────────────────────────────────────────────────────
 
 def _groq_model() -> str:
     return os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
@@ -122,8 +113,6 @@ def _groq_model() -> str:
 def _endee_url() -> str | None:
     return os.getenv("ENDEE_BASE_URL") or None
 
-
-# ── Request / Response models ─────────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
     repo_url:   str
@@ -176,7 +165,6 @@ class ChatResponse(BaseModel):
     citations:  list[CitationItem]
 
 
-# ── Analysis endpoints ────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["ops"])
 async def health():
@@ -239,7 +227,6 @@ async def analyze_html(req: AnalyzeRequest):
     return HTMLResponse(content=result.flowchart_html)
 
 
-# ── Chat endpoints ────────────────────────────────────────────────────────────
 
 @app.post("/chat", response_model=ChatResponse, tags=["chat"])
 async def chat(req: ChatRequest):
@@ -332,20 +319,17 @@ async def chat_stream(req: ChatRequest):
             endee_url=_endee_url(),
             groq_model=req.groq_model or _groq_model(),
         ):
-            # Collect answer tokens (not the citations event or [DONE])
             if event.startswith("data: ") and not event.startswith("data: [DONE]") \
                     and not event.startswith("event:"):
                 token = event[6:].replace("<br>", "\n").rstrip("\n")
                 full_answer_parts.append(token)
             yield event
 
-        # After stream ends, persist to session history
         full_answer = "".join(full_answer_parts)
         _sessions[session_id].append({"role": "user",      "content": req.question})
         _sessions[session_id].append({"role": "assistant",  "content": full_answer})
         _sessions[session_id] = _sessions[session_id][-20:]
 
-        # Yield the session_id as a final metadata event so client can store it
         yield f"event: session\ndata: {json.dumps({'session_id': session_id})}\n\n"
 
     return StreamingResponse(
@@ -359,7 +343,6 @@ async def chat_stream(req: ChatRequest):
     )
 
 
-# ── Session management ────────────────────────────────────────────────────────
 
 @app.get("/chat/sessions", tags=["chat"])
 async def list_sessions():
