@@ -1,0 +1,80 @@
+# ── Version control ───────────────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+
+# ── Python cache & compiled files ────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+.env/
+
+# ── Secrets — NEVER bake into image ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── Local output & temp directories ──────────────────────────────────────────
+output/
+outputs/
+tmp/
+temp/
+*.tmp
+
+# ── Cloned repos (created at runtime, huge, not needed in image) ─────────────
+ghviz_*/
+
+# ── HuggingFace / Torch model cache (baked in during Docker build stage) ─────
+# Uncomment the line below ONLY if you want a lean image and are ok with
+# models downloading at first container start (~750 MB, adds ~2 min cold start)
+# .cache/
+
+# ── IDE & OS artefacts ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Docs & non-runtime files ──────────────────────────────────────────────────
+docs/
+*.md
+!README.md
+*.rst
+notebooks/
+*.ipynb
+
+# ── Azure / CI artefacts (not needed inside the container) ───────────────────
+azure/
+.github/
+Makefile
+
+# ── Docker files themselves (no need to copy into the image) ─────────────────
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
