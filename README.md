@@ -327,11 +327,9 @@ github-visualizer/
 ├── chat.py                   # RAG chat engine (retrieve → LLM → stream)
 ├── main.py                   # CLI entry point
 ├── frontend.html             # Single-file UI — open with Live Server
-├── diagnose_endee.py         # Connectivity debug script
 ├── requirements.txt
 ├── Dockerfile
 ├── .dockerignore
-├── .env.example
 │
 ├── agents/
 │   ├── clone_agent.py        # git clone --depth=1 to temp dir
@@ -346,11 +344,6 @@ github-visualizer/
 ├── utils/
 │   └── helpers.py            # Groq client, Endee client, ST embeddings,
 │                             # chunking, slugify, ensure_index (with retry)
-│
-└── azure/
-    ├── container-app.bicep   # IaC — deploys both containers to Azure
-    ├── deploy.sh             # One-command build → push → deploy script
-    └── github-actions.yml    # CI/CD workflow template
 ```
 
 ---
@@ -365,5 +358,4 @@ The application is being deployed to **Azure Container Apps** with the following
 - `github-visualizer` — application image pushed to Azure Container Registry, public HTTPS ingress
 
 Both containers run in the same Container Apps Environment and communicate over the private internal network at `http://endee-server:8080/api/v1`.
-
-Infrastructure is defined in `azure/container-app.bicep`. Run `azure/deploy.sh` for a one-command build, push, and deploy. CI/CD via GitHub Actions is configured in `azure/github-actions.yml`.
+The Application Image is already available on docker hub, visit `https://hub.docker.com/repository/docker/notshivain/githubvisualizer/general`
